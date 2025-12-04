@@ -64,17 +64,25 @@ try:
     if df_history.empty:
         st.stop()
     
-    # Ambil data terakhir untuk referensi (Lag Features)
-    last_row = df_history.iloc[-1]
-    last_student = last_row['student'] if 'student' in df_history.columns else 0
+    # --- PERBAIKAN LOGIKA LAG (REAL DATA) ---
+    # Kita butuh data 2 bulan terakhir untuk Lag_1 dan Lag_2
+    if len(df_history) >= 2:
+        last_row = df_history.iloc[-1]       # Data Terakhir (Misal: Okt 2025)
+        second_last_row = df_history.iloc[-2] # Data Sebelum Terakhir (Misal: Sep 2025)
+        
+        last_student = last_row['student']         # Ini jadi Lag_1
+        prev_student = second_last_row['student']  # Ini jadi Lag_2 (REAL, BUKAN ESTIMASI)
+    else:
+        # Fallback kalau datanya cuma 1 baris (jarang terjadi)
+        last_student = df_history.iloc[-1]['student']
+        prev_student = last_student # Asumsi flat
     
-    # Hitung Rata-rata historis untuk mode "Auto Pilot"
+    # Hitung Rata-rata historis
     avg_marketing = df_history['Spending_Marketing'].mean()
     avg_beasiswa = df_history['Beasiswa'].mean()
     
 except Exception as e:
     st.error(f"Terjadi kesalahan saat memuat data: {e}")
-    st.info("Pastikan file 'final_model_xgb.pkl' dan 'clean_scholarship_data_2023_2025.csv' ada di folder VS Code.")
     st.stop()
 
 # ==========================================
@@ -113,14 +121,14 @@ run_predict = st.sidebar.button("🚀 Jalankan Prediksi", type="primary")
 predicted_student = 0
 
 if run_predict:
-    # Siapkan Data Input sesuai format Training XGBoost
+    # Siapkan Data Input
     input_data = pd.DataFrame({
         'Spending_Marketing': [marketing_input],
         'Beasiswa': [beasiswa_input],
         'Month_Num': [predict_date.month],
-        'Year': [predict_date.year],   # PENTING: Kolom Year
+        'Year': [predict_date.year],
         'Lag_1': [last_student],       
-        'Lag_2': [last_student * 0.95] 
+        'Lag_2': [prev_student]  # <--- SEKARANG SUDAH PAKAI DATA ASLI (Real September)
     })
     
     # Prediksi
@@ -128,8 +136,7 @@ if run_predict:
         prediction = model.predict(input_data)
         predicted_student = int(prediction[0])
     except Exception as e:
-        st.error(f"Gagal memprediksi: {e}. Cek apakah kolom input sesuai dengan data training.")
-
+        st.error(f"Gagal memprediksi: {e}")
 # ==========================================
 # 5. DASHBOARD UTAMA
 # ==========================================
